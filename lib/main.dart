@@ -28,6 +28,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+        // Cuppertino App parece ter uma série de limitações quanto tema.
         title: 'Personal Expenses',
         home: MyHomePage(),
         theme: ThemeData(
@@ -55,7 +56,9 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
+  // "WidgetsBindingObserver" para detectar o ciclos de vida do app.
+
   final List<Transaction> _userTransactions = [
     // Transaction(
     //     id: 't1', title: 'New Shoes', amount: 79.99, date: DateTime.now()),
@@ -64,6 +67,27 @@ class _MyHomePageState extends State<MyHomePage> {
   ];
 
   bool _showChart = false;
+
+  @override
+  void initState() {
+    WidgetsBinding.instance?.addObserver(this);
+    super.initState();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print("state: " + state.name);
+  }
+
+  @override
+  dispose() {
+    // Sempre que usar o "WidgetsBindingObserver", tem que limpar os event listener. Eles não são apagados automaticamente!
+    //
+
+    WidgetsBinding.instance?.removeObserver(this);
+
+    super.dispose();
+  }
 
   List<Transaction> get _recentTransactions {
     // Lista de transações recentes, só queremos mostrar no chart as últimas transações.
@@ -110,6 +134,40 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  // Criar funções para retornar quando é Landscape e quando é Portrait me pareceu uma ideia muito boa.
+  Widget _builtLandscapeContent() {
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Text('Show Chart'),
+      Switch.adaptive(
+        // Este .adaptive permite que seja desenhado no no formato iOS / Android dependendo do sistema que o usuário está usando.
+        // Pode usar sem o ".adaptive", assim ele desenha, no caso, no formato do android.
+        value: _showChart,
+        onChanged: (value) {
+          setState(() {
+            _showChart = value;
+          });
+        },
+      )
+    ]);
+  }
+
+  List<Widget> _builtPortraitContent(
+      MediaQueryData mediaQuery, AppBar appBar, txListWiget) {
+    return [
+      Container(
+          width: double.infinity,
+          child: Container(
+              height: (mediaQuery.size.height -
+                      appBar.preferredSize.height -
+                      mediaQuery.padding.top) *
+                  0.3,
+              // Não vejo sentido em setar a altura assim, mas vou deixar assim para referências posteriores.
+              // MediaQuery.of(context).padding.top é topo do celuar, aquela informação onde fica a bateria, e afins.
+              child: Chart(_recentTransactions))),
+      txListWiget
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     // O professor colocou o AppBar em uma variável separada, para poder utilizar a altura como referência.
@@ -148,33 +206,11 @@ class _MyHomePageState extends State<MyHomePage> {
     final pageBody = SafeArea(
         child: Column(
       children: <Widget>[
-        if (isLandscape)
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            // Cuidar que este if é um if específico da linguagem, é um if dentro de uma lista!
-            Text('Show Chart'),
-            Switch.adaptive(
-              // Este .adaptive permite que seja desenhado no no formato iOS / Android dependendo do sistema que o usuário está usando.
-              // Pode usar sem o ".adaptive", assim ele desenha, no caso, no formato do android.
-              value: _showChart,
-              onChanged: (value) {
-                setState(() {
-                  _showChart = value;
-                });
-              },
-            )
-          ]),
+        if (isLandscape) // Cuidar que este if é um if específico da linguagem, é um if dentro de uma lista! Muito útil.
+          _builtLandscapeContent(),
         if (!isLandscape)
-          Container(
-              width: double.infinity,
-              child: Container(
-                  height: (mediaQuery.size.height -
-                          appBar.preferredSize.height -
-                          mediaQuery.padding.top) *
-                      0.3,
-                  // Não vejo sentido em setar a altura assim, mas vou deixar assim para referências posteriores.
-                  // MediaQuery.of(context).padding.top é topo do celuar, aquela informação onde fica a bateria, e afins.
-                  child: Chart(_recentTransactions))),
-        if (!isLandscape) txListWiget,
+          ..._builtPortraitContent(mediaQuery, appBar as AppBar,
+              txListWiget), //Este: "..." pega os itens da lista, e junta com a lista (no caso da lista de Widget do Column)
         if (isLandscape)
           _showChart
               ? Container(
